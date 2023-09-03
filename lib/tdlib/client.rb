@@ -2,6 +2,48 @@ require 'securerandom'
 
 # Simple client for TDLib.
 class TD::Client
+  class WaitResolver
+    def initialize(client:, timeout:)
+      @client = client
+      @timeout = timeout
+      @resolved = false
+      @resolved_value = nil
+      @update_handlers = []
+    end
+
+    def wait(&block)
+      Timeout.timeout(@timeout) do
+        block.call(self)
+
+        sleep 0.001 until resolved?
+      end
+      @resolved_value
+    ensure
+      cancel_update_handlers!
+    end
+
+    def on(update_type, &action)
+      update_handler = @client.on(update_type, &action)
+      @update_handlers << update_handler
+    end
+
+    def resolve!(value = nil)
+      @resolved = true
+      cancel_update_handlers!
+      @resolved_value = value
+    end
+
+    private
+
+    def resolved?
+      @resolved
+    end
+
+    def cancel_update_handlers!
+      @update_handlers.each(&:dispose!)
+    end
+  end
+
   include Concurrent
   include TD::ClientMethods
 
@@ -106,6 +148,11 @@ class TD::Client
     TD::Api.client_execute(@td_client, query)
   end
 
+  def wait(timeout: TIMEOUT, &block)
+    resolver = WaitResolver.new(client: self, timeout: timeout)
+    resolver.wait(&block)
+  end
+
   # Binds passed block as a handler for updates with type of *update_type*
   # @param [String, Class] update_type
   # @yield [update] yields update to the block as soon as it's received
@@ -122,7 +169,9 @@ class TD::Client
       raise ArgumentError.new("Wrong type specified (#{update_type}). Should be of kind TD::Types::Base")
     end
 
-    @update_manager << TD::UpdateHandler.new(update_type, &action)
+    update_handler = TD::UpdateHandler.new(update_type, &action)
+    @update_manager << update_handler
+    update_handler
   end
 
   # returns future that will be fulfilled when client is ready
