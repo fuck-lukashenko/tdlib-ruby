@@ -13,7 +13,8 @@ class TD::UpdateHandler
   end
 
   def run(update)
-    action.call(update)
+    return if disposed?
+    action.call(update, self)
   rescue StandardError => e
     warn("Uncaught exception in handler #{self}: #{e.message}")
     raise
@@ -27,8 +28,17 @@ class TD::UpdateHandler
     disposable
   end
 
+  def disposed?
+    @disposed
+  end
+
+  def dispose!
+    @disposable = true
+    @disposed = true
+  end
+
   def to_s
-    "TD::UpdateHandler (#{update_type}#{": #{extra}" if extra})#{' disposable' if disposable?}"
+    "TD::UpdateHandler (#{update_type}#{": #{extra}" if extra})#{' disposable' if disposable?}#{' disposed' if disposable?}"
   end
 
   alias inspect to_s

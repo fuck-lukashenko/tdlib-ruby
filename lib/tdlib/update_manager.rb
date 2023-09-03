@@ -41,8 +41,8 @@ class TD::UpdateManager
   def match_handlers!(update, extra)
     @mutex.synchronize do
       matched_handlers = handlers.select { |h| h.match?(update, extra) }
-      matched_handlers.each { |h| handlers.delete(h) if h.disposable? }
-      matched_handlers
+      matched_handlers.each { |h| handlers.delete(h) if h.disposable? || h.disposed? }
+      matched_handlers.reject(&:disposed?)
     end
   end
 end
