@@ -60,12 +60,14 @@ class TD::Client
   def initialize(td_client = TD::Api.client_create,
                  update_manager = TD::UpdateManager.new(td_client),
                  timeout: TIMEOUT,
+                 proxy_config: nil,
                  **extra_config)
     @td_client = td_client
     @ready = false
     @alive = true
     @update_manager = update_manager
     @timeout = timeout
+    @proxy_config = proxy_config
     @config = TD.config.client.to_h.merge(extra_config)
     @ready_condition_mutex = Mutex.new
     @ready_condition = ConditionVariable.new
@@ -78,6 +80,7 @@ class TD::Client
     on TD::Types::Update::AuthorizationState do |update|
       case update.authorization_state
       when TD::Types::AuthorizationState::WaitTdlibParameters
+        apply_proxy!
         set_tdlib_parameters(**@config)
       when TD::Types::AuthorizationState::Ready
         @ready_condition_mutex.synchronize do
@@ -212,6 +215,37 @@ class TD::Client
   end
 
   private
+
+  def apply_proxy!
+    return if @proxy_config.nil?
+
+    type = (
+      case @proxy_config.fetch(:type)
+      when 'http'
+        TD::Types::ProxyType::Http.new(
+          http_only: @proxy_config.fetch(:http_only),
+          username: @proxy_config.fetch(:username),
+          password: @proxy_config.fetch(:password)
+        )
+      when 'socks5'
+        TD::Types::ProxyType::Socks5.new(
+          username: @proxy_config.fetch(:username),
+          password: @proxy_config.fetch(:password)
+        )
+      when 'mtproto'
+        TD::Types::ProxyType::Mtproto.new(
+          secret: @proxy_config.fetch(:secret)
+        )
+      end
+    )
+
+    add_proxy(
+      server: @proxy_config.fetch(:server),
+      port: @proxy_config.fetch(:port),
+      type:,
+      enable: true
+    )
+  end
 
   def handle_update(update)
     return unless update.is_a?(TD::Types::Update::AuthorizationState) && update.authorization_state.is_a?(TD::Types::AuthorizationState::Closed)
