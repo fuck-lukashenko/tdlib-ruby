@@ -47,7 +47,7 @@ class TD::Client
   include Concurrent
   include TD::ClientMethods
 
-  TIMEOUT = 20
+  TIMEOUT = 50
 
   def self.ready(*args)
     new(*args).connect
@@ -151,8 +151,8 @@ class TD::Client
     TD::Api.client_execute(@td_client, query)
   end
 
-  def wait(timeout: TIMEOUT, &block)
-    resolver = WaitResolver.new(client: self, timeout: timeout)
+  def wait(timeout: nil, &block)
+    resolver = WaitResolver.new(client: self, timeout: timeout || @timeout)
     resolver.wait(&block)
   end
 
